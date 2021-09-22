@@ -126,6 +126,8 @@ class WalziPropShare(Peer):
                 not_reserved = int(math.ceil(self.up_bw * total_percent))
                 reserved = int(self.up_bw - not_reserved)
 
+                print(imp_peers, "yolo")
+
                 for peer in imp_peers:
                     chosen.append(peer[0])
                     rate = (peer[1] / total_blocks)
@@ -146,7 +148,8 @@ class WalziPropShare(Peer):
                 optimistic = random.choice(not_peer)
                 chosen.append(optimistic)
                 bws.append(reserved)
-                # print(self.id, chosen, bws, "HIIIIIIIIIIII", reserved)
+
+
 
 
 
