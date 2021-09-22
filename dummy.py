@@ -14,6 +14,7 @@ from util import even_split
 from peer import Peer
 
 class Dummy(Peer):
+
     def post_init(self):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
@@ -23,9 +24,7 @@ class Dummy(Peer):
         """
         peers: available info about the peers (who has what pieces)
         history: what's happened so far as far as this peer can see
-
         returns: a list of Request() objects
-
         This will be called after update_pieces() with the most recent state.
         """
         needed = lambda i: self.pieces[i] < self.conf.blocks_per_piece
@@ -75,9 +74,7 @@ class Dummy(Peer):
         requests -- a list of the requests for this peer for this round
         peers -- available info about all the peers
         history -- history for all previous rounds
-
         returns: list of Upload objects.
-
         In each round, this will be called after requests().
         """
 
