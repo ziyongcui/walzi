@@ -34,7 +34,7 @@ class WalziPropShare(Peer):
 
         needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
         needed_pieces_list = filter(needed, [x for x in range(num_pieces)])
-        
+
         # Counting how rare pieces are
         piece_availability = [0] * num_pieces
         for peer in peers:
@@ -115,71 +115,10 @@ class WalziPropShare(Peer):
                 share[requester] = self.up_bw / len(requesters)
         else:
             regular_allocation = 0.9
-            
+
             if len(random_selection_set) == 0:
                 regular_allocation = 1
             else:
-<<<<<<< HEAD
-                total_blocks = 0
-                total_percent = 0.9
-                imp_peers = []
-                total_peers = []
-                for peer in peers:
-                    if peer.id[:4] != "Seed":
-                        total_peers.append(peer.id)
-
-                requester_id = []
-                for request in requests:
-                    requester_id.append(request.requester_id)
-                ## look at history.downloads[round-1] and find the total number of uploads
-                for request in requests:
-                    ## we only upload the peers who request from us
-                    for peer_tuple in history.downloads[round-1]:
-                        if (peer_tuple.from_id == request.requester_id and peer_tuple.blocks > 0):
-                            total_blocks += peer_tuple.blocks
-                            imp_peers.append((peer_tuple.from_id, peer_tuple.blocks))
-                ## this should give the peers who are requesting from us and have uploaded to us in the past
-                not_reserved = int(math.ceil(self.up_bw * total_percent))
-                reserved = int(self.up_bw - not_reserved)
-
-                print(imp_peers, "yolo")
-
-                for peer in imp_peers:
-                    chosen.append(peer[0])
-                    rate = (peer[1] / total_blocks)
-                    bws.append(int(math.floor(rate * not_reserved)))
-
-                count = 0
-                if len(bws) > 0:
-                    while not_reserved > sum(bws):
-                        try:
-                            bws[count] += 1
-                            count += 1
-                        except:
-                            count = 0
-                else:
-                    reserved = self.up_bw
-
-                not_peer = [item for item in total_peers if item not in imp_peers]
-                optimistic = random.choice(not_peer)
-                chosen.append(optimistic)
-                bws.append(reserved)
-
-
-
-
-
-
-
-            # request = random.choice(requests)
-            # chosen = [request.requester_id]
-            # Evenly "split" my upload bandwidth among the one chosen requester
-
-
-        # create actual uploads out of the list of peer ids and bandwidths
-        uploads = [Upload(self.id, peer_id, bw)
-                   for (peer_id, bw) in zip(chosen, bws)]
-=======
                 share[random.choice(random_selection_set)] = self.up_bw * (1 - regular_allocation)
 
             for requester in requesters:
@@ -197,6 +136,5 @@ class WalziPropShare(Peer):
                 amt += 1
                 remaining_roundups -= 1
             uploads.append(Upload(self.id, requester, amt))
->>>>>>> a6fd96848915e6aa458411f0c5986542fcb92c94
 
         return uploads

@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# This is a dummy peer that just illustrates the available information your peers 
+# This is a dummy peer that just illustrates the available information your peers
 # have available.
 
 # You'll want to copy this file to AgentNameXXX.py for various versions of XXX,
@@ -18,7 +18,8 @@ class WalziTourney(Peer):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
         self.dummy_state["cake"] = "lie"
-    
+
+    ## use rareest first
     def requests(self, peers, history):
         """
         peers: available info about the peers (who has what pieces)
@@ -28,45 +29,45 @@ class WalziTourney(Peer):
 
         This will be called after update_pieces() with the most recent state.
         """
-        needed = lambda i: self.pieces[i] < self.conf.blocks_per_piece
-        needed_pieces = list(filter(needed, list(range(len(self.pieces)))))
-        np_set = set(needed_pieces)  # sets support fast intersection ops.
+        num_pieces = len(self.pieces)
 
+        needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
+        needed_pieces_list = filter(needed, [x for x in range(num_pieces)])
 
-        logging.debug("%s here: still need pieces %s" % (
-            self.id, needed_pieces))
+        # Counting how rare pieces are
+        piece_availability = [0] * num_pieces
+        for peer in peers:
+            for piece in peer.available_pieces:
+                piece_availability[piece] += 1
 
-        logging.debug("%s still here. Here are some peers:" % self.id)
-        for p in peers:
-            logging.debug("id: %s, available pieces: %s" % (p.id, p.available_pieces))
+        rarity_key = lambda pid: piece_availability[pid]
 
-        logging.debug("And look, I have my entire history available too:")
-        logging.debug("look at the AgentHistory class in history.py for details")
-        logging.debug(str(history))
+        # Divide pieces by their rarity
+        pieces_by_rarity = [set() for _ in range(len(peers) + 1)]
+        for needed_piece in needed_pieces_list:
+            pieces_by_rarity[rarity_key(needed_piece)].add(needed_piece)
 
-        requests = []   # We'll put all the things we want here
-        # Symmetry breaking is good...
-        random.shuffle(needed_pieces)
-        
-        # Sort peers by id.  This is probably not a useful sort, but other 
-        # sorts might be useful
-        peers.sort(key=lambda p: p.id)
-        # request all available pieces from all peers!
-        # (up to self.max_requests from each)
+        # for i, pieces_in_rarity_group in enumerate(pieces_by_rarity):
+        #    print("Rarity group %d: %s\n"%(i, str(pieces_in_rarity_group)))
+
+        # Create Requests
+        requests = []
+
         for peer in peers:
             av_set = set(peer.available_pieces)
-            isect = av_set.intersection(np_set)
-            n = min(self.max_requests, len(isect))
-            # More symmetry breaking -- ask for random pieces.
-            # This would be the place to try fancier piece-requesting strategies
-            # to avoid getting the same thing from multiple peers at a time.
-            for piece_id in random.sample(isect, n):
-                # aha! The peer has this piece! Request it.
-                # which part of the piece do we need next?
-                # (must get the next-needed blocks in order)
-                start_block = self.pieces[piece_id]
-                r = Request(self.id, peer.id, piece_id, start_block)
-                requests.append(r)
+            remaining_requests = self.max_requests
+
+            # ASSUMPTION that between equally rare pieces, we randomly choose which ones to request from a given peer
+            for pieces_in_rarity_group in pieces_by_rarity:
+                isect = av_set.intersection(pieces_in_rarity_group)
+                n = min(remaining_requests, len(isect))
+
+                for piece_id in random.sample(isect, n):
+                    start_block = self.pieces[piece_id]
+                    r = Request(self.id, peer.id, piece_id, start_block)
+                    requests.append(r)
+
+                remaining_requests -= n
 
         return requests
 
@@ -89,6 +90,21 @@ class WalziTourney(Peer):
         # has a list of Download objects for each Download to this peer in
         # the previous round.
 
+        download_estimates = dict()
+
+        if round > 0:
+            for i in range(0,round):
+                print("HERE", self.id)
+                for peer_tuple in history.downloads[i]:
+                    print(peer_tuple, "Round " + str(i))
+        #     for peer_tuple in history.downloads[round - 1]:
+        #         print(peer_tuple)
+        #         if peer_tuple.from_id in download_estimates:
+        #             download_estimates[peer_tuple.from_id] += peer_tuple.blocks
+        #         else:
+        #             download_estimates[peer_tuple.from_id] = peer_tuple.blocks
+        # print(download_estimates)
+
         if len(requests) == 0:
             logging.debug("No one wants my pieces!")
             chosen = []
@@ -106,5 +122,5 @@ class WalziTourney(Peer):
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
                    for (peer_id, bw) in zip(chosen, bws)]
-            
+
         return uploads
