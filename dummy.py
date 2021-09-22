@@ -13,7 +13,8 @@ from messages import Upload, Request
 from util import even_split
 from peer import Peer
 
-class Walzi(Peer):
+class Dummy(Peer):
+
     def post_init(self):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
