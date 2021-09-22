@@ -19,7 +19,7 @@ class WalziStd(Peer):
         self.regular_slots = set()
         self.optimistic_unchoke = set()
 
-        self.num_slots = min(4, self.up_bw) # ASSUMPTION that we set the number of unchoke slots to 4 or less if we can't even provide that much uploading
+        self.num_slots = min(3, self.up_bw) # ASSUMPTION that we set the number of unchoke slots to 4 or less if we can't even provide that much uploading
 
         print(("post_init(): %s here!" % self.id))
     
@@ -46,9 +46,12 @@ class WalziStd(Peer):
         rarity_key = lambda pid: piece_availability[pid]
 
         # Divide pieces by their rarity
-        pieces_by_rarity = [set()] * (len(peers) + 1)
+        pieces_by_rarity = [set() for _ in range(len(peers) + 1)]
         for needed_piece in needed_pieces_list:
             pieces_by_rarity[rarity_key(needed_piece)].add(needed_piece)
+
+        # for i, pieces_in_rarity_group in enumerate(pieces_by_rarity):
+        #    print("Rarity group %d: %s\n"%(i, str(pieces_in_rarity_group)))
 
         # Create Requests
         requests = []
