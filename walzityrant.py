@@ -9,16 +9,41 @@
 import random
 import logging
 
+from collections import defaultdict
 from messages import Upload, Request
 from util import even_split
 from peer import Peer
 
 class WalziTyrant(Peer):
     def post_init(self):
+        self.r = 3
+        self.gamma = 0.1
+        self.alpha = 0.2
+        self.period = 5
+
+        min_up_bw = self.conf.min_up_bw
+        max_up_bw = self.conf.max_up_bw
+
+        # Use the expected bandwidth
+        expected_bw = (min_up_bw + max_up_bw) / 2
+        init_d_estimate = expected_bw / 4 # Assuming evenly divided among 4 slots
+        init_u_estimate = self.up_bw / 4 # Arbitrary assumption so that we unchoke 4 at the start
+
+        # The estimates stored as dicts
+        self.d = defaultdict(lambda: init_d_estimate)
+        self.u = defaultdict(lambda: init_u_estimate)
+        self.unchoked = set()
+        self.time_unchoked_by = defaultdict(lambda: 0)
+
+        print("Config: %s"%self.conf)
         print(("post_init(): %s here!" % self.id))
+<<<<<<< HEAD
         self.dummy_state = dict()
         self.dummy_state["cake"] = "lie"
 
+=======
+    
+>>>>>>> cb3402988ac23b449c761738b2678b568ffa959e
     def requests(self, peers, history):
         """
         peers: available info about the peers (who has what pieces)
@@ -26,22 +51,28 @@ class WalziTyrant(Peer):
         returns: a list of Request() objects
         This will be called after update_pieces() with the most recent state.
         """
-        needed = lambda i: self.pieces[i] < self.conf.blocks_per_piece
-        needed_pieces = list(filter(needed, list(range(len(self.pieces)))))
-        np_set = set(needed_pieces)  # sets support fast intersection ops.
+        num_pieces = len(self.pieces)
 
+        needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
+        needed_pieces_list = filter(needed, [x for x in range(num_pieces)])
+        
+        # Counting how rare pieces are
+        piece_availability = [0] * num_pieces
+        for peer in peers:
+            for piece in peer.available_pieces:
+                piece_availability[piece] += 1
 
-        logging.debug("%s here: still need pieces %s" % (
-            self.id, needed_pieces))
+        rarity_key = lambda pid: piece_availability[pid]
 
-        logging.debug("%s still here. Here are some peers:" % self.id)
-        for p in peers:
-            logging.debug("id: %s, available pieces: %s" % (p.id, p.available_pieces))
+        # Divide pieces by their rarity
+        pieces_by_rarity = [set() for _ in range(len(peers) + 1)]
+        for needed_piece in needed_pieces_list:
+            pieces_by_rarity[rarity_key(needed_piece)].add(needed_piece)
 
-        logging.debug("And look, I have my entire history available too:")
-        logging.debug("look at the AgentHistory class in history.py for details")
-        logging.debug(str(history))
+        # Create Requests
+        requests = []
 
+<<<<<<< HEAD
         requests = []   # We'll put all the things we want here
         # Symmetry breaking is good...
         random.shuffle(needed_pieces)
@@ -51,20 +82,23 @@ class WalziTyrant(Peer):
         peers.sort(key=lambda p: p.id)
         # request all available pieces from all peers!
         # (up to self.max_requests from each)
+=======
+>>>>>>> cb3402988ac23b449c761738b2678b568ffa959e
         for peer in peers:
             av_set = set(peer.available_pieces)
-            isect = av_set.intersection(np_set)
-            n = min(self.max_requests, len(isect))
-            # More symmetry breaking -- ask for random pieces.
-            # This would be the place to try fancier piece-requesting strategies
-            # to avoid getting the same thing from multiple peers at a time.
-            for piece_id in random.sample(isect, n):
-                # aha! The peer has this piece! Request it.
-                # which part of the piece do we need next?
-                # (must get the next-needed blocks in order)
-                start_block = self.pieces[piece_id]
-                r = Request(self.id, peer.id, piece_id, start_block)
-                requests.append(r)
+            remaining_requests = self.max_requests
+
+            # ASSUMPTION that between equally rare pieces, we randomly choose which ones to request from a given peer
+            for pieces_in_rarity_group in pieces_by_rarity:
+                isect = av_set.intersection(pieces_in_rarity_group)
+                n = min(remaining_requests, len(isect))
+
+                for piece_id in random.sample(isect, n):
+                    start_block = self.pieces[piece_id]
+                    r = Request(self.id, peer.id, piece_id, start_block)
+                    requests.append(r)
+
+                remaining_requests -= n
 
         return requests
 
@@ -78,6 +112,7 @@ class WalziTyrant(Peer):
         """
 
         round = history.current_round()
+<<<<<<< HEAD
         logging.debug("%s again.  It's round %d." % (
             self.id, round))
         # One could look at other stuff in the history too here.
@@ -102,5 +137,77 @@ class WalziTyrant(Peer):
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
                    for (peer_id, bw) in zip(chosen, bws)]
+=======
+        peer_set = set([peer.id for peer in peers])
+
+        # Record how much received from each peer
+        received_from = defaultdict(lambda: 0)
+        if round > 0:
+            for download in history.downloads[round - 1]:
+                received_from[download.from_id] += download.blocks
+                print("Received %d from %s"%(download.blocks, download.from_id))
+
+        # Update estimations (going off of end from last period)
+
+        if round % self.period == 0:
+            for peer in self.unchoked:
+                if received_from[peer] > 0:
+                    self.d[peer] = received_from[peer]
+                    if self.time_unchoked_by[peer] >= self.r:
+                        self.u[peer] *= 1 - self.gamma
+                else:
+                    self.u[peer] *= 1 + self.alpha
+
+                    # Benefit of having this line is to make sure the random pertubations don't break the order
+                    self.u[peer] = min(self.u[peer], self.conf.max_up_bw)
+
+            # Keep track of how long we have been unchoked by our peers
+            for peer in peer_set.difference(set(received_from.keys())):
+                self.time_unchoked_by[peer] = 0
+            for peer in received_from.keys():
+                self.time_unchoked_by[peer] += 1
+
+            random_pertubation_max = self.conf.max_up_bw * self.conf.max_up_bw
+            self.efficiency_map = dict()
+            
+            print("Efficiencies:")
+            for peer in peers:
+                # We make the denominator an integer because that is what we'll actually be sending them
+                self.efficiency_map[peer.id] = self.d[peer.id] / max(1, int(self.u[peer.id])) + random.uniform(0, random_pertubation_max)
+                print("From %s: %d / %d = %f"%(peer.id, self.d[peer.id], self.u[peer.id], self.d[peer.id] / max(1, int(self.u[peer.id]))))
+            print("Time Unchoked:")
+            for peer in peers:
+                print("By %s: %d"%(peer.id, self.time_unchoked_by[peer.id]))
+
+        requesters = set()
+        for request in requests:
+            requesters.add(request.requester_id)
+
+        self.unchoked = self.unchoked.intersection(requesters)
+        if round % self.period == 0:
+            self.unchoked.clear()
+
+        unchoked_requesters = requesters.difference(self.unchoked)
+        sorted_requesters = sorted(list(unchoked_requesters), key=lambda peer: self.efficiency_map[peer], reverse=True)
+            
+        uploads = []
+        remaining_bw = self.up_bw
+
+        for requester in self.unchoked:
+            bw = int(self.u[requester])
+            if remaining_bw >= bw:
+                uploads.append(Upload(self.id, requester, bw))
+                remaining_bw -= bw
+
+        for requester in sorted_requesters:
+            bw = int(self.u[requester])
+            if remaining_bw >= bw:
+                uploads.append(Upload(self.id, requester, bw))
+                remaining_bw -= bw
+                self.unchoked.add(requester)
+            else:
+                break
+        print("Unchoking: %s"%(self.unchoked))
+>>>>>>> cb3402988ac23b449c761738b2678b568ffa959e
 
         return uploads
