@@ -99,9 +99,10 @@ class WalziPropShare(Peer):
         random_selection_set = set()
 
         ## look at history.downloads[round-1] and find the total number of uploads
+        last_round_downloads = history.downloads[round - 1] if round > 0 else []
         for requester in requesters:
             ## we only upload the peers who request from us
-            for peer_tuple in history.downloads[round - 1]:
+            for peer_tuple in last_round_downloads:
                 if peer_tuple.from_id == request.requester_id:
                     total_blocks += peer_tuple.blocks
                     received_from[requester] += peer_tuple.blocks
