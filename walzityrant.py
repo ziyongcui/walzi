@@ -105,7 +105,7 @@ class WalziTyrant(Peer):
         if round > 0:
             for download in history.downloads[round - 1]:
                 received_from[download.from_id] += download.blocks
-                print("Received %d from %s"%(download.blocks, download.from_id))
+                #print("Received %d from %s"%(download.blocks, download.from_id))
 
         # Update estimations (going off of end from last period)
 
@@ -130,14 +130,14 @@ class WalziTyrant(Peer):
             random_pertubation_max = self.conf.max_up_bw * self.conf.max_up_bw
             self.efficiency_map = dict()
             
-            print("Efficiencies:")
+            #print("Efficiencies:")
             for peer in peers:
                 # We make the denominator an integer because that is what we'll actually be sending them
                 self.efficiency_map[peer.id] = self.d[peer.id] / max(1, int(self.u[peer.id])) + random.uniform(0, random_pertubation_max)
-                print("From %s: %d / %d = %f"%(peer.id, self.d[peer.id], self.u[peer.id], self.d[peer.id] / max(1, int(self.u[peer.id]))))
-            print("Time Unchoked:")
-            for peer in peers:
-                print("By %s: %d"%(peer.id, self.time_unchoked_by[peer.id]))
+                #print("From %s: %d / %d = %f"%(peer.id, self.d[peer.id], self.u[peer.id], self.d[peer.id] / max(1, int(self.u[peer.id]))))
+            #print("Time Unchoked:")
+            # for peer in peers:
+                # print("By %s: %d"%(peer.id, self.time_unchoked_by[peer.id]))
 
         requesters = set()
         for request in requests:
@@ -167,6 +167,6 @@ class WalziTyrant(Peer):
                 self.unchoked.add(requester)
             else:
                 break
-        print("Unchoking: %s"%(self.unchoked))
+        # print("Unchoking: %s"%(self.unchoked))
 
         return uploads
