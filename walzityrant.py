@@ -19,6 +19,7 @@ class WalziTyrant(Peer):
         self.r = 3
         self.gamma = 0.1
         self.alpha = 0.2
+        self.period = 5
 
         min_up_bw = self.conf.min_up_bw
         max_up_bw = self.conf.max_up_bw
@@ -108,41 +109,56 @@ class WalziTyrant(Peer):
 
         # Update estimations (going off of end from last period)
 
-        for peer in self.unchoked:
-            if received_from[peer] > 0:
-                self.d[peer] = received_from[peer]
-                if self.time_unchoked_by[peer] >= self.r:
-                    self.u[peer] *= 1 - self.gamma
-            else:
-                self.u[peer] *= 1 + self.alpha
+        if round % self.period == 0:
+            for peer in self.unchoked:
+                if received_from[peer] > 0:
+                    self.d[peer] = received_from[peer]
+                    if self.time_unchoked_by[peer] >= self.r:
+                        self.u[peer] *= 1 - self.gamma
+                else:
+                    self.u[peer] *= 1 + self.alpha
 
-                # Benefit of having this line is to make sure the random pertubations don't break the order
-                self.u[peer] = min(self.u[peer], self.conf.max_up_bw)
+                    # Benefit of having this line is to make sure the random pertubations don't break the order
+                    self.u[peer] = min(self.u[peer], self.conf.max_up_bw)
 
-        # Keep track of how long we have been unchoked by our peers
-        for peer in peer_set.difference(set(received_from.keys())):
-            self.time_unchoked_by[peer] = 0
-        for peer in received_from.keys():
-            self.time_unchoked_by[peer] += 1
+            # Keep track of how long we have been unchoked by our peers
+            for peer in peer_set.difference(set(received_from.keys())):
+                self.time_unchoked_by[peer] = 0
+            for peer in received_from.keys():
+                self.time_unchoked_by[peer] += 1
 
-        random_pertubation_max = self.conf.max_up_bw * self.conf.max_up_bw
-        efficiency_map = dict()
-        
-        # print("Efficiencies:")
-        for peer in peers:
-            # We make the denominator an integer because that is what we'll actually be sending them
-            efficiency_map[peer.id] = self.d[peer.id] / int(self.u[peer.id]) + random.uniform(0, random_pertubation_max)
-            # print("From %s: %d / %d = %f"%(peer.id, self.d[peer.id], self.u[peer.id], self.d[peer.id] / int(self.u[peer.id])))
-        
+            random_pertubation_max = self.conf.max_up_bw * self.conf.max_up_bw
+            self.efficiency_map = dict()
+            
+            print("Efficiencies:")
+            for peer in peers:
+                # We make the denominator an integer because that is what we'll actually be sending them
+                self.efficiency_map[peer.id] = self.d[peer.id] / max(1, int(self.u[peer.id])) + random.uniform(0, random_pertubation_max)
+                print("From %s: %d / %d = %f"%(peer.id, self.d[peer.id], self.u[peer.id], self.d[peer.id] / max(1, int(self.u[peer.id]))))
+            print("Time Unchoked:")
+            for peer in peers:
+                print("By %s: %d"%(peer.id, self.time_unchoked_by[peer.id]))
 
         requesters = set()
         for request in requests:
             requesters.add(request.requester_id)
-        sorted_requesters = sorted(list(requesters), key=lambda peer: efficiency_map[peer], reverse=True)
-        
+
+        self.unchoked = self.unchoked.intersection(requesters)
+        if round % self.period == 0:
+            self.unchoked.clear()
+
+        unchoked_requesters = requesters.difference(self.unchoked)
+        sorted_requesters = sorted(list(unchoked_requesters), key=lambda peer: self.efficiency_map[peer], reverse=True)
+            
         uploads = []
         remaining_bw = self.up_bw
-        self.unchoked.clear()
+
+        for requester in self.unchoked:
+            bw = int(self.u[requester])
+            if remaining_bw >= bw:
+                uploads.append(Upload(self.id, requester, bw))
+                remaining_bw -= bw
+
         for requester in sorted_requesters:
             bw = int(self.u[requester])
             if remaining_bw >= bw:
@@ -151,6 +167,6 @@ class WalziTyrant(Peer):
                 self.unchoked.add(requester)
             else:
                 break
-        # print("Unchoking: %s"%(self.unchoked))
+        print("Unchoking: %s"%(self.unchoked))
 
         return uploads

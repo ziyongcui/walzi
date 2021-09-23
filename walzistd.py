@@ -20,6 +20,8 @@ class WalziStd(Peer):
         self.optimistic_unchoke = set()
 
         self.num_slots = min(4, self.up_bw) # ASSUMPTION that we set the number of unchoke slots to 4 or less if we can't even provide that much uploading
+        self.period = 10
+        self.r = 3 # Number of periods between optimisitc unchokes
 
         print(("post_init(): %s here!" % self.id))
     
@@ -107,7 +109,7 @@ class WalziStd(Peer):
         choked_set = peers_requesting.difference(unchoked_set)
 
         # Figure out who to unchoke
-        if (round % 10 == 0) or len(unchoked_set) < self.num_slots:
+        if (round % self.period == 0) or len(unchoked_set) < self.num_slots:
             # Calculate total amount downloaded from peers from last 20 rounds
 
             # The random initialization is a trick to break ties between same average/cumulative downloads
@@ -119,9 +121,9 @@ class WalziStd(Peer):
                         download_total[download.from_id] += download.blocks
 
             # Completely restart the decision on these key rounds
-            if round % 10 == 0:
+            if round % self.period == 0:
                 self.regular_slots = set()
-            if round % 30 == 0:
+            if round % (self.r * self.period) == 0:
                 self.optimistic_unchoke = set()
             
             best_peers = sorted(list(choked_set), key=lambda peer: download_total[peer], reverse=True)
