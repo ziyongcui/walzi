@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# This is a dummy peer that just illustrates the available information your peers 
+# This is a dummy peer that just illustrates the available information your peers
 # have available.
 
 # You'll want to copy this file to AgentNameXXX.py for various versions of XXX,
@@ -18,14 +18,12 @@ class WalziTyrant(Peer):
         print(("post_init(): %s here!" % self.id))
         self.dummy_state = dict()
         self.dummy_state["cake"] = "lie"
-    
+
     def requests(self, peers, history):
         """
         peers: available info about the peers (who has what pieces)
         history: what's happened so far as far as this peer can see
-
         returns: a list of Request() objects
-
         This will be called after update_pieces() with the most recent state.
         """
         needed = lambda i: self.pieces[i] < self.conf.blocks_per_piece
@@ -47,8 +45,8 @@ class WalziTyrant(Peer):
         requests = []   # We'll put all the things we want here
         # Symmetry breaking is good...
         random.shuffle(needed_pieces)
-        
-        # Sort peers by id.  This is probably not a useful sort, but other 
+
+        # Sort peers by id.  This is probably not a useful sort, but other
         # sorts might be useful
         peers.sort(key=lambda p: p.id)
         # request all available pieces from all peers!
@@ -75,9 +73,7 @@ class WalziTyrant(Peer):
         requests -- a list of the requests for this peer for this round
         peers -- available info about all the peers
         history -- history for all previous rounds
-
         returns: list of Upload objects.
-
         In each round, this will be called after requests().
         """
 
@@ -106,5 +102,5 @@ class WalziTyrant(Peer):
         # create actual uploads out of the list of peer ids and bandwidths
         uploads = [Upload(self.id, peer_id, bw)
                    for (peer_id, bw) in zip(chosen, bws)]
-            
+
         return uploads
