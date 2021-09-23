@@ -37,13 +37,7 @@ class WalziTyrant(Peer):
 
         print("Config: %s"%self.conf)
         print(("post_init(): %s here!" % self.id))
-<<<<<<< HEAD
-        self.dummy_state = dict()
-        self.dummy_state["cake"] = "lie"
 
-=======
-    
->>>>>>> cb3402988ac23b449c761738b2678b568ffa959e
     def requests(self, peers, history):
         """
         peers: available info about the peers (who has what pieces)
@@ -55,7 +49,7 @@ class WalziTyrant(Peer):
 
         needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
         needed_pieces_list = filter(needed, [x for x in range(num_pieces)])
-        
+
         # Counting how rare pieces are
         piece_availability = [0] * num_pieces
         for peer in peers:
@@ -72,18 +66,6 @@ class WalziTyrant(Peer):
         # Create Requests
         requests = []
 
-<<<<<<< HEAD
-        requests = []   # We'll put all the things we want here
-        # Symmetry breaking is good...
-        random.shuffle(needed_pieces)
-
-        # Sort peers by id.  This is probably not a useful sort, but other
-        # sorts might be useful
-        peers.sort(key=lambda p: p.id)
-        # request all available pieces from all peers!
-        # (up to self.max_requests from each)
-=======
->>>>>>> cb3402988ac23b449c761738b2678b568ffa959e
         for peer in peers:
             av_set = set(peer.available_pieces)
             remaining_requests = self.max_requests
@@ -112,32 +94,6 @@ class WalziTyrant(Peer):
         """
 
         round = history.current_round()
-<<<<<<< HEAD
-        logging.debug("%s again.  It's round %d." % (
-            self.id, round))
-        # One could look at other stuff in the history too here.
-        # For example, history.downloads[round-1] (if round != 0, of course)
-        # has a list of Download objects for each Download to this peer in
-        # the previous round.
-
-        if len(requests) == 0:
-            logging.debug("No one wants my pieces!")
-            chosen = []
-            bws = []
-        else:
-            logging.debug("Still here: uploading to a random peer")
-            # change my internal state for no reason
-            self.dummy_state["cake"] = "pie"
-
-            request = random.choice(requests)
-            chosen = [request.requester_id]
-            # Evenly "split" my upload bandwidth among the one chosen requester
-            bws = even_split(self.up_bw, len(chosen))
-
-        # create actual uploads out of the list of peer ids and bandwidths
-        uploads = [Upload(self.id, peer_id, bw)
-                   for (peer_id, bw) in zip(chosen, bws)]
-=======
         peer_set = set([peer.id for peer in peers])
 
         # Record how much received from each peer
@@ -169,7 +125,7 @@ class WalziTyrant(Peer):
 
             random_pertubation_max = self.conf.max_up_bw * self.conf.max_up_bw
             self.efficiency_map = dict()
-            
+
             print("Efficiencies:")
             for peer in peers:
                 # We make the denominator an integer because that is what we'll actually be sending them
@@ -189,7 +145,7 @@ class WalziTyrant(Peer):
 
         unchoked_requesters = requesters.difference(self.unchoked)
         sorted_requesters = sorted(list(unchoked_requesters), key=lambda peer: self.efficiency_map[peer], reverse=True)
-            
+
         uploads = []
         remaining_bw = self.up_bw
 
@@ -208,6 +164,5 @@ class WalziTyrant(Peer):
             else:
                 break
         print("Unchoking: %s"%(self.unchoked))
->>>>>>> cb3402988ac23b449c761738b2678b568ffa959e
 
         return uploads
