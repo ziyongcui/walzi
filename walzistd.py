@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-# This is a dummy peer that just illustrates the available information your peers
+# This is a dummy peer that just illustrates the available information your peers 
 # have available.
 
 # You'll want to copy this file to AgentNameXXX.py for various versions of XXX,
@@ -20,11 +20,11 @@ class WalziStd(Peer):
         self.optimistic_unchoke = set()
 
         self.num_slots = min(4, self.up_bw) # ASSUMPTION that we set the number of unchoke slots to 4 or less if we can't even provide that much uploading
-        self.period = 1
+        self.period = 5
         self.r = 3 # Number of periods between optimisitc unchokes
 
         print(("post_init(): %s here!" % self.id))
-
+    
     def requests(self, peers, history):
         """
         peers: available info about the peers (who has what pieces)
@@ -35,8 +35,8 @@ class WalziStd(Peer):
         num_pieces = len(self.pieces)
 
         needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
-        needed_pieces_list = filter(needed, [x for x in range(num_pieces)])
-
+        needed_pieces_list = list(filter(needed, [x for x in range(num_pieces)]))
+        
         # Counting how rare pieces are
         piece_availability = [0] * num_pieces
         for peer in peers:
@@ -121,7 +121,7 @@ class WalziStd(Peer):
                 self.regular_slots = set()
             if round % (self.r * self.period) == 0:
                 self.optimistic_unchoke = set()
-
+            
             best_peers = sorted(list(choked_set), key=lambda peer: download_total[peer], reverse=True)
 
             # unchoke up to num_slots - 1 regularly
