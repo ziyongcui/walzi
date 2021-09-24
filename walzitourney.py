@@ -32,6 +32,8 @@ class WalziTourney(Peer):
 
         self.sum = defaultdict(lambda: 0)
         self.n = defaultdict(lambda: 0)
+        # Number of pieces we want before resorting to rarity algorithm. Before this point we just try to get to this many pieces ASAP
+        self.threshold_pieces = len(self.pieces) / 6
 
 
 
@@ -47,42 +49,59 @@ class WalziTourney(Peer):
         num_pieces = len(self.pieces)
 
         needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
-        needed_pieces_list = filter(needed, [x for x in range(num_pieces)])
+        needed_pieces_list = list(filter(needed, [x for x in range(num_pieces)]))
+        num_pieces_have = num_pieces - len(needed_pieces_list)
 
-        # Counting how rare pieces are
-        piece_availability = [0] * num_pieces
-        for peer in peers:
-            for piece in peer.available_pieces:
-                piece_availability[piece] += 1
-
-        rarity_key = lambda pid: piece_availability[pid]
-
-        # Divide pieces by their rarity
-        pieces_by_rarity = [set() for _ in range(len(peers) + 1)]
-        for needed_piece in needed_pieces_list:
-            pieces_by_rarity[rarity_key(needed_piece)].add(needed_piece)
-
-        # for i, pieces_in_rarity_group in enumerate(pieces_by_rarity):
-        #    print("Rarity group %d: %s\n"%(i, str(pieces_in_rarity_group)))
-
-        # Create Requests
         requests = []
+        
+        if num_pieces_have < self.threshold_pieces:
+            random.shuffle(needed_pieces_list)
+            needed_pieces_list.sort(key=lambda x: self.pieces[x], reverse=True)
 
-        for peer in peers:
-            av_set = set(peer.available_pieces)
-            remaining_requests = self.max_requests
+            for peer in peers:
+                remaining_requests = self.max_requests
+                peer_requests = []
+                for piece in needed_pieces_list:
+                    if piece in peer.available_pieces and remaining_requests > 0:
+                        start_block = self.pieces[piece]
+                        r = Request(self.id, peer.id, piece, start_block)
+                        peer_requests.append(r)
+                        remaining_requests -= 1
+                random.shuffle(peer_requests)
+                requests.extend(peer_requests)
+        else:
+            
+            # Counting how rare pieces are
+            piece_availability = [0] * num_pieces
+            for peer in peers:
+                for piece in peer.available_pieces:
+                    piece_availability[piece] += 1
 
-            # ASSUMPTION that between equally rare pieces, we randomly choose which ones to request from a given peer
-            for pieces_in_rarity_group in pieces_by_rarity:
-                isect = av_set.intersection(pieces_in_rarity_group)
-                n = min(remaining_requests, len(isect))
+            rarity_key = lambda pid: piece_availability[pid]
 
-                for piece_id in random.sample(isect, n):
-                    start_block = self.pieces[piece_id]
-                    r = Request(self.id, peer.id, piece_id, start_block)
-                    requests.append(r)
+            # Divide pieces by their rarity
+            pieces_by_rarity = [set() for _ in range(len(peers) + 1)]
+            for needed_piece in needed_pieces_list:
+                pieces_by_rarity[rarity_key(needed_piece)].add(needed_piece)
 
-                remaining_requests -= n
+            # Create Requests
+            requests = []
+
+            for peer in peers:
+                av_set = set(peer.available_pieces)
+                remaining_requests = self.max_requests
+
+                # ASSUMPTION that between equally rare pieces, we randomly choose which ones to request from a given peer
+                for pieces_in_rarity_group in pieces_by_rarity:
+                    isect = av_set.intersection(pieces_in_rarity_group)
+                    n = min(remaining_requests, len(isect))
+
+                    for piece_id in random.sample(isect, n):
+                        start_block = self.pieces[piece_id]
+                        r = Request(self.id, peer.id, piece_id, start_block)
+                        requests.append(r)
+
+                    remaining_requests -= n
 
         return requests
 
