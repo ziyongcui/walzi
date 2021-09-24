@@ -20,7 +20,7 @@ class WalziStd(Peer):
         self.optimistic_unchoke = set()
 
         self.num_slots = min(4, self.up_bw) # ASSUMPTION that we set the number of unchoke slots to 4 or less if we can't even provide that much uploading
-        self.period = 10
+        self.period = 5
         self.r = 3 # Number of periods between optimisitc unchokes
 
         print(("post_init(): %s here!" % self.id))
@@ -37,7 +37,7 @@ class WalziStd(Peer):
         num_pieces = len(self.pieces)
 
         needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
-        needed_pieces_list = filter(needed, [x for x in range(num_pieces)])
+        needed_pieces_list = list(filter(needed, [x for x in range(num_pieces)]))
         
         # Counting how rare pieces are
         piece_availability = [0] * num_pieces
