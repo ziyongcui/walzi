@@ -16,12 +16,25 @@ from peer import Peer
 
 class WalziTourney(Peer):
     def post_init(self):
-        self.regular_slots = set()
-        self.optimistic_unchoke = set()
+        self.r = 3
+        self.gamma = 0.1
+        self.alpha = 0.2
+        self.period = 7
+        self.debug = False
 
-        self.num_slots = min(4, self.up_bw) # ASSUMPTION that we set the number of unchoke slots to 4 or less if we can't even provide that much uploading
-        self.period = 5
-        self.r = 3 # Number of periods between optimisitc unchokes
+        min_up_bw = self.conf.min_up_bw
+        max_up_bw = self.conf.max_up_bw
+
+        # Use the expected bandwidth
+        expected_bw = (min_up_bw + max_up_bw) / 2
+        init_d_estimate = expected_bw / 4 # Assuming evenly divided among 4 slots
+        init_u_estimate = self.up_bw / 4 # Arbitrary assumption so that we unchoke 4 at the start
+
+        # The estimates stored as dicts
+        self.d = defaultdict(lambda: init_d_estimate)
+        self.u = defaultdict(lambda: init_u_estimate)
+        self.unchoked = set()
+        self.time_unchoked_by = defaultdict(lambda: 0)
 
         # Number of pieces we want before resorting to rarity algorithm. Before this point we just try to get to this many pieces ASAP
         self.threshold_pieces = len(self.pieces) / 6
@@ -107,75 +120,93 @@ class WalziTourney(Peer):
         In each round, this will be called after requests().
         """
 
-        # ASSUMPTION that between matching download rates from peers, we break ties randomly (also means we initialize randomly)
-        # ASSUMPTION that if some unchoke slots are not taken (maybe lack of requests or a previous peer is no longer requesting),
-        # we continue to try to fill them based on the latest histories, even if the round is not a multiple of 10, leaving the slots
-        # that are already filled with the same peers
-
         round = history.current_round()
+        peer_set = set([peer.id for peer in peers])
 
-        # Do some preprocessing of incoming requests
-        amount_requested = defaultdict(lambda: 0)
-        peers_requesting = set()
-        for request in requests:
-            peers_requesting.add(request.requester_id)
-            amount_requested[request.requester_id] += self.conf.blocks_per_piece - request.start
+        # Record how much received from each peer
+        received_from = defaultdict(lambda: 0)
 
+        if round - 1 > 0:
+            for download in history.downloads[round - 1]:
+                received_from[download.from_id] += download.blocks
+            # print("Received %d from %s"%(download.blocks, download.from_id))
 
-        # If a peer is no longer requesting, free the slot
-        self.regular_slots = self.regular_slots.intersection(peers_requesting)
-        self.optimistic_unchoke = self.optimistic_unchoke.intersection(peers_requesting)
-        unchoked_set = self.regular_slots.union(self.optimistic_unchoke)
-        choked_set = peers_requesting.difference(unchoked_set)
+        for peer in received_from.keys():
+            if received_from[peer] > 0:
+                self.d[peer] = received_from[peer]
 
-        # Figure out who to unchoke
-        if (round % self.period == 0) or len(unchoked_set) < self.num_slots:
-            # Calculate total amount downloaded from peers from last 20 rounds
+        if self.debug:
+            print("Received: %s"%received_from)
 
-            # The random initialization is a trick to break ties between same average/cumulative downloads
-            download_total = defaultdict(lambda: random.uniform(0, 1))
+        # Update estimations (going off of end from last period)
 
-            for rounds_past in range(1, min(round, 21)): # 21 to make the total number of rounds added up equal 20
-                for download in history.downloads[round - 1]:
-                    if download.to_id == self.id: # Probably unnecessary check but just in case
-                        download_total[download.from_id] += download.blocks
+        if round % self.period == 0:
+            # Keep track of how long we have been unchoked by our peers
+            for peer in peer_set.difference(set(received_from.keys())):
+                self.time_unchoked_by[peer] = 0
+            for peer in received_from.keys():
+                self.time_unchoked_by[peer] += 1
 
-            # Completely restart the decision on these key rounds
-            if round % self.period == 0:
-                self.regular_slots = set()
-            if round % (self.r * self.period) == 0:
-                self.optimistic_unchoke = set()
+            for peer in self.unchoked:
+                if received_from[peer] > 0:
+                    if self.time_unchoked_by[peer] >= self.r:
+                        self.u[peer] *= 1 - self.gamma
+                else:
+                    self.u[peer] *= 1 + self.alpha
+
+                    # Benefit of having this line is to make sure the random pertubations don't break the order
+                    self.u[peer] = min(self.u[peer], self.conf.max_up_bw)
+
+            random_pertubation_max = 1 / (self.conf.max_up_bw * self.conf.max_up_bw)
+            self.efficiency_map = dict()
             
-            best_peers = sorted(list(choked_set), key=lambda peer: download_total[peer], reverse=True)
+            if self.debug:
+                print("Efficiencies:")
+            for peer in peers:
+                # We make the denominator an integer because that is what we'll actually be sending them
+                self.efficiency_map[peer.id] = self.d[peer.id] / max(1, int(self.u[peer.id])) + random.uniform(0, random_pertubation_max)
+                if self.debug:
+                    print("From %s: %d / %d = %f"%(peer.id, self.d[peer.id], max(1, int(self.u[peer.id])), self.d[peer.id] / max(1, int(self.u[peer.id]))))
+            
+            if self.debug:
+                print("Time Unchoked:")
+                for peer in peers:
+                   print("By %s: %d"%(peer.id, self.time_unchoked_by[peer.id]))
 
-            # unchoke up to num_slots - 1 regularly
-            num_regular_unchoke = min(len(best_peers), self.num_slots - 1 - len(self.regular_slots))
-            self.regular_slots.update(best_peers[:num_regular_unchoke])
+        requesters = set()
+        for request in requests:
+            requesters.add(request.requester_id)
+        
+        if self.debug:
+            print("Requesters: %s"%(requesters))
 
-            # optimistic unchoke is applicable
-            if len(self.optimistic_unchoke) == 0 and num_regular_unchoke < len(best_peers):
-                self.optimistic_unchoke.add(random.choice(best_peers[num_regular_unchoke:]))
+        # self.unchoked = self.unchoked.intersection(requesters)
+        if round % self.period == 0:
+            self.unchoked.clear()
 
-        # ASSUMPTION that if some peers request less than the amount they would have been given, the
-        # excess is given to the other peers. If all peers have their requests completely satisfied, we
-        # do not use the excess bandwidth
-
-        # ASSUMPTION that if unable to split evenly because it does not divide, we arbitrarily choose some
-        # to give 1 more block to
-        unchoked_list = list(self.regular_slots) + list(self.optimistic_unchoke)
-        unchoked_list.sort(key=lambda peer: amount_requested[peer])
-
+        choked_requesters = requesters.difference(self.unchoked)
+        sorted_requesters = sorted(list(choked_requesters), key=lambda peer: self.efficiency_map[peer], reverse=True)
+            
         uploads = []
         remaining_bw = self.up_bw
-        for i, peer in enumerate(unchoked_list):
-            # check to see if this peer will be maxed out
-            if amount_requested[peer] * (len(unchoked_list) - i) < remaining_bw:
-                amt_upload = amount_requested[peer]
-                remaining_bw -= amount_requested[peer]
-            else:
-                amt_upload = remaining_bw // (len(unchoked_list) - i)
 
-            uploads.append(Upload(self.id, peer, amt_upload))
-            remaining_bw -= amt_upload
+        for requester in set(self.unchoked).intersection(requesters):
+            bw = int(self.u[requester])
+            if remaining_bw >= bw:
+                uploads.append(Upload(self.id, requester, bw))
+                remaining_bw -= bw
+
+        if round % self.period == 0:
+            for requester in sorted_requesters:
+                bw = int(self.u[requester])
+                if remaining_bw >= bw:
+                    uploads.append(Upload(self.id, requester, bw))
+                    remaining_bw -= bw
+                    self.unchoked.add(requester)
+                else:
+                    break
+        
+        if self.debug:
+            print("Unchoking: %s"%(self.unchoked))
 
         return uploads

@@ -16,7 +16,7 @@ from peer import Peer
 
 class WalziTyrant(Peer):
     def post_init(self):
-        self.r = 1
+        self.r = 3
         self.gamma = 0.1
         self.alpha = 0.2
         self.period = 5
