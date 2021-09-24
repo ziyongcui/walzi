@@ -99,7 +99,7 @@ class WalziPropShare(Peer):
         for requester in requesters:
             ## we only upload the peers who request from us
             for peer_tuple in last_round_downloads:
-                if peer_tuple.from_id == request.requester_id:
+                if peer_tuple.from_id == requester:
                     total_blocks += peer_tuple.blocks
                     received_from[requester] += peer_tuple.blocks
 
@@ -116,7 +116,7 @@ class WalziPropShare(Peer):
             if len(random_selection_set) == 0:
                 regular_allocation = 1
             else:
-                share[random.choice(random_selection_set)] = self.up_bw * (1 - regular_allocation)
+                share[random.choice(list(random_selection_set))] = self.up_bw * (1 - regular_allocation)
 
             for requester in requesters:
                 share[requester] = received_from[requester] / total_blocks * regular_allocation * self.up_bw

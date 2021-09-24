@@ -33,7 +33,7 @@ class WalziTourney(Peer):
         self.sum = defaultdict(lambda: 0)
         self.n = defaultdict(lambda: 0)
         # Number of pieces we want before resorting to rarity algorithm. Before this point we just try to get to this many pieces ASAP
-        self.threshold_pieces = len(self.pieces) / 6
+        self.threshold_pieces = 5 #len(self.pieces) / 6
 
 
 
@@ -54,7 +54,7 @@ class WalziTourney(Peer):
 
         requests = []
         
-        if num_pieces_have < self.threshold_pieces:
+        if False: #num_pieces_have < self.threshold_pieces:
             random.shuffle(needed_pieces_list)
             needed_pieces_list.sort(key=lambda x: self.pieces[x], reverse=True)
 
@@ -114,6 +114,15 @@ class WalziTourney(Peer):
         In each round, this will be called after requests().
         """
 
+        num_pieces = len(self.pieces)
+
+        needed = lambda pid: self.pieces[pid] < self.conf.blocks_per_piece
+        needed_pieces_list = list(filter(needed, [x for x in range(num_pieces)]))
+
+        # Evil after we have what we want
+        if len(needed_pieces_list) == 0:
+            return []
+
         round = history.current_round()
 
         # One could look at other stuff in the history too here.
@@ -152,17 +161,17 @@ class WalziTourney(Peer):
         for requester in requesters:
             ## we only upload the peers who request from us
             for peer_tuple in last_round_downloads_1:
-                if peer_tuple.from_id == request.requester_id:
-                    total_blocks += 3*peer_tuple.blocks*self.reputation[peer_tuple.from_id]/10
-                    received_from[requester] += 3*peer_tuple.blocks*self.reputation[peer_tuple.from_id]/10
+                if peer_tuple.from_id == requester:
+                    total_blocks += 3 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
+                    received_from[requester] += 3 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
             for peer_tuple in last_round_downloads_2:
-                if peer_tuple.from_id == request.requester_id:
-                    total_blocks += 2*peer_tuple.blocks*self.reputation[peer_tuple.from_id]/10
-                    received_from[requester] += 2*peer_tuple.blocks*self.reputation[peer_tuple.from_id]/10
+                if peer_tuple.from_id == requester:
+                    total_blocks += 2 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
+                    received_from[requester] += 2 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
             for peer_tuple in last_round_downloads_3:
-                if peer_tuple.from_id == request.requester_id:
-                    total_blocks += peer_tuple.blocks*self.reputation[peer_tuple.from_id]/10
-                    received_from[requester] += peer_tuple.blocks*self.reputation[peer_tuple.from_id]/10
+                if peer_tuple.from_id == requester:
+                    total_blocks += peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
+                    received_from[requester] += peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
 
             if received_from[requester] == 0:
                 random_selection_set.add(requester)
@@ -172,12 +181,12 @@ class WalziTourney(Peer):
             for requester in requesters:
                 share[requester] = self.up_bw / len(requesters)
         else:
-            regular_allocation = 0.9
+            regular_allocation = 0.8
 
             if len(random_selection_set) == 0:
                 regular_allocation = 1
             else:
-                share[random.choice(random_selection_set)] = self.up_bw * (1 - regular_allocation)
+                share[random.choice(list(random_selection_set))] = self.up_bw * (1 - regular_allocation)
 
             for requester in requesters:
                 share[requester] = received_from[requester] / total_blocks * regular_allocation * self.up_bw
