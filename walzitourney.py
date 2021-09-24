@@ -161,15 +161,15 @@ class WalziTourney(Peer):
         for requester in requesters:
             ## we only upload the peers who request from us
             for peer_tuple in last_round_downloads_1:
-                if peer_tuple.from_id == requester:
+                if peer_tuple.from_id == request.requester_id:
                     total_blocks += 3 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
                     received_from[requester] += 3 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
             for peer_tuple in last_round_downloads_2:
-                if peer_tuple.from_id == requester:
+                if peer_tuple.from_id == request.requester_id:
                     total_blocks += 2 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
                     received_from[requester] += 2 * peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
             for peer_tuple in last_round_downloads_3:
-                if peer_tuple.from_id == requester:
+                if peer_tuple.from_id == request.requester_id:
                     total_blocks += peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
                     received_from[requester] += peer_tuple.blocks * self.reputation[peer_tuple.from_id] / 10
 
